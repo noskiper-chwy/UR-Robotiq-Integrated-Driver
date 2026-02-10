@@ -1,5 +1,5 @@
-from pymodbus.client.sync import ModbusSerialClient
-from pymodbus.register_read_message import ReadHoldingRegistersResponse
+from pymodbus.client import ModbusSerialClient
+from pymodbus.pdu.register_message import ReadHoldingRegistersResponse
 from pymodbus.exceptions import ModbusIOException
 
 import pymodbus
@@ -12,11 +12,10 @@ class RobotiqRTUClient:
         self.unit_id = unit_id
         self.command_register = input_addr
         self.status_registers = output_addr
-        print(pymodbus.__version__)
+        print(f"pymodbus version: {pymodbus.__version__}")
 
     def connect(self, device_addr):
-        self.client = ModbusSerialClient(method = 'rtu',
-                                         port = device_addr,
+        self.client = ModbusSerialClient(port = device_addr,
                                          stopbits = 1,
                                          bytesize = 8,
                                          baudrate = 115200,
@@ -38,12 +37,12 @@ class RobotiqRTUClient:
             message.append((command[2*i] << 8) + command[2*i+1])
         # sending the command
         try:
-            reply = self.client.write_registers(self.command_register, message, unit=self.unit_id)
+            reply = self.client.write_registers(self.command_register, message, device_id=self.unit_id)
         except Exception as e:
             print(e)
             return False
         # check if the reply is valid
-        if isinstance(reply, ModbusIOException):
+        if isinstance(reply, ModbusIOException) or (hasattr(reply, 'isError') and reply.isError()):
             print('ModbusIOException occured!')
             print(reply)
             return False
@@ -52,10 +51,10 @@ class RobotiqRTUClient:
 
     def request_status(self, nbytes = 6):
         nregs = int(ceil(nbytes/2.0))
-        raw_status = self.client.read_holding_registers(self.status_registers, nregs, unit = self.unit_id, timeout = 3)
-        if isinstance(raw_status, ReadHoldingRegistersResponse):
+        raw_status = self.client.read_holding_registers(self.status_registers, count=nregs, device_id=self.unit_id)
+        if isinstance(raw_status, ReadHoldingRegistersResponse) and not raw_status.isError():
             return self.parse_registers(raw_status, nregs)
-        elif isinstance(raw_status, ModbusIOException):
+        elif isinstance(raw_status, ModbusIOException) or (hasattr(raw_status, 'isError') and raw_status.isError()):
             print('ModbusIOException occured!')
             print(raw_status)
             return None
@@ -66,6 +65,6 @@ class RobotiqRTUClient:
     def parse_registers(self, recv_regs, nregs):
         output = []
         for i in range(nregs):
-            output.append((recv_regs.getRegister(i) & 0xFF00) >> 8)
-            output.append( recv_regs.getRegister(i) & 0x00FF)
+            output.append((recv_regs.registers[i] & 0xFF00) >> 8)
+            output.append( recv_regs.registers[i] & 0x00FF)
         return output

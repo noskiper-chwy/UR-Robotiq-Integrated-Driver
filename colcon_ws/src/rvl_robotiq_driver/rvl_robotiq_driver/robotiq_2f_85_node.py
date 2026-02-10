@@ -14,14 +14,19 @@ from sensor_msgs.msg import JointState
 class Robotiq2F85ControllerNode(Node):
     def __init__(self):
         super().__init__('robotiq_2f_85_controller_node')
+        
+        # Declare parameters
+        self.declare_parameter('device_path', '/tmp/ttyUR')
+        self.device_path = self.get_parameter('device_path').get_parameter_value().string_value
+        
         self.communicator:RobotiqRTUClient = RobotiqRTUClient()
         self.activated:bool = False
         self.status:list = []
 
         # attempt to connect to robotiq gripper via RS485
-        self.get_logger().warn('Waiting for robotiq connection...')
-        while self.communicator.connect('/tmp/ttyUR') is False:
-            self.get_logger().info('Waiting for connection...')
+        self.get_logger().warn(f'Waiting for robotiq connection on {self.device_path}...')
+        while self.communicator.connect(self.device_path) is False:
+            self.get_logger().info(f'Waiting for connection on {self.device_path}...')
             time.sleep(1)
 
         # should be connected now, wait a bit
